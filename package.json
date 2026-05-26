@@ -13,7 +13,7 @@
     "react-dom": "^18",
     "jszip": "^3.10.1",
     "exceljs": "^4.4.0",
-    "anthropic": "^0.24.3",
+    "anthropic": "^0.39.0",
     "formidable": "^3.5.1"
   },
   "devDependencies": {
