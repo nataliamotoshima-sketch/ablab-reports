@@ -1,9 +1,9 @@
 import formidable from 'formidable'
 import fs from 'fs'
-import path from 'path'
 import JSZip from 'jszip'
 import ExcelJS from 'exceljs'
 import Anthropic from '@anthropic-ai/sdk'
+import { getTemplateBuffer } from './template_b64.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -134,34 +134,7 @@ async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, h
   const mes_atual_cap = mes_atual.charAt(0).toUpperCase() + mes_atual.slice(1)
   const mes_ant_cap = mesAnt.charAt(0).toUpperCase() + mesAnt.slice(1)
 
-  // Try multiple paths to find the template
-  const possiblePaths = [
-    path.join(process.cwd(), 'public', 'template.pptx'),
-    path.join(process.cwd(), 'template.pptx'),
-    '/var/task/public/template.pptx',
-    '/var/task/template.pptx',
-  ]
-
-  let templateBuffer = null
-  for (const p of possiblePaths) {
-    try {
-      if (fs.existsSync(p)) {
-        templateBuffer = fs.readFileSync(p)
-        console.log('Template found at:', p, 'size:', templateBuffer.length)
-        break
-      }
-    } catch(e) {}
-  }
-
-  if (!templateBuffer) {
-    throw new Error('Template não encontrado. Paths tentados: ' + possiblePaths.join(', '))
-  }
-
-  // Verify it's a valid ZIP
-  if (templateBuffer[0] !== 0x50 || templateBuffer[1] !== 0x4B) {
-    throw new Error('Template corrompido - não é um arquivo ZIP válido. Tamanho: ' + templateBuffer.length)
-  }
-
+  const templateBuffer = getTemplateBuffer()
   const zip = await JSZip.loadAsync(templateBuffer)
 
   const r = (xml, old, nw) => xml.split(old).join(nw)
