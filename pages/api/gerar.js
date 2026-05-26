@@ -95,24 +95,25 @@ async function generateTexts({ g, m, ga4, marca, periodo, meta, mesAnt, contexto
   const pctMeta = meta ? Math.round(g.conv / meta * 100) : null
   const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const num = v => Math.round(v).toLocaleString('pt-BR')
-  const varPct = (a, b) => b ? (Math.round((a - b) / b * 100) >= 0 ? '+' : '') + Math.round((a - b) / b * 100) + '%' : 'n/d'
+  const varPct = (a, b) => {
+    if (!b) return 'n/d'
+    const p = Math.round((a - b) / b * 100)
+    return (p >= 0 ? '+' : '') + p + '%'
+  }
 
-  const prompt = `Você é analista sênior de mídia digital da agência a/b lab. Gere textos para um report mensal de mídia paga. Tom: direto, analítico, dados embasando cada afirmação.
-
-DADOS:
-- Marca: ${marca} | Período: ${periodo}
-- Meta: ${num(meta)} conversões | Realizadas (Google): ${num(g.conv)}${pctMeta ? ' (' + pctMeta + '% da meta)' : ''}
-
-GOOGLE ADS: Invest ${brl(g.custo)} | Impr ${num(g.impr)} | Cliques ${num(g.cli)} | CTR ${g.ctr.toFixed(1)}% | CPC ${brl(g.cpc)} | Conv ${num(g.conv)} | Tx.Conv ${g.txc.toFixed(1)}% | CPA ${brl(g.cpa)}
-META ADS: Invest ${brl(m.custo)} | Impr ${num(m.impr)} | Cliques ${num(m.cli)} | CTR ${m.ctr.toFixed(2)}% | CPC ${brl(m.cpc)}
-BOTÕES GA4: Tuotempo ${num(ga4.tuotempo)} | WhatsApp ${num(ga4.whatsapp)} | Telefone ${num(ga4.telefone)} | Total ${num(ga4.total)}
-HISTÓRICO ${mesAnt.toUpperCase()}: Tuotempo ${num(histTuo)} | WhatsApp ${num(histWhats)} | Telefone ${num(histTel)}
-VARIAÇÕES: Tuotempo ${varPct(ga4.tuotempo, histTuo)} | WhatsApp ${varPct(ga4.whatsapp, histWhats)} | Telefone ${varPct(ga4.telefone, histTel)}
-CONTEXTO: ${contexto || 'Não informado'}
-PRÓXIMOS PASSOS: ${proximos || 'Não informado'}
-
-Retorne SOMENTE JSON válido sem markdown:
-{"intro_p1":"","intro_p2":"","dados_perf":"","botoes_p1":"","botoes_p2":"","campanha_p1":"","campanha_p2":"","sem1":"","sem2":"","sem3":"","sem4":"","sem5":"","funil_p1":"","funil_p2":"","termos1":"","termos2":"","termos3":"","projecao":"","conclusao_p1":"","conclusao_p2":"","conclusao_p3":"","prox1":"","prox2":"","prox3":""}`
+  const prompt = 'Você é analista sênior de mídia digital da agência a/b lab. Gere textos para um report mensal de mídia paga. Tom: direto, analítico, dados embasando cada afirmação.\n\n'
+    + 'DADOS:\n'
+    + '- Marca: ' + marca + ' | Período: ' + periodo + '\n'
+    + '- Meta: ' + num(meta) + ' conversões | Realizadas (Google): ' + num(g.conv) + (pctMeta ? ' (' + pctMeta + '% da meta)' : '') + '\n\n'
+    + 'GOOGLE ADS: Invest ' + brl(g.custo) + ' | Impr ' + num(g.impr) + ' | Cliques ' + num(g.cli) + ' | CTR ' + g.ctr.toFixed(1) + '% | CPC ' + brl(g.cpc) + ' | Conv ' + num(g.conv) + ' | Tx.Conv ' + g.txc.toFixed(1) + '% | CPA ' + brl(g.cpa) + '\n'
+    + 'META ADS: Invest ' + brl(m.custo) + ' | Impr ' + num(m.impr) + ' | Cliques ' + num(m.cli) + ' | CTR ' + m.ctr.toFixed(2) + '% | CPC ' + brl(m.cpc) + '\n'
+    + 'BOTÕES GA4: Tuotempo ' + num(ga4.tuotempo) + ' | WhatsApp ' + num(ga4.whatsapp) + ' | Telefone ' + num(ga4.telefone) + ' | Total ' + num(ga4.total) + '\n'
+    + 'HISTÓRICO ' + mesAnt.toUpperCase() + ': Tuotempo ' + num(histTuo) + ' | WhatsApp ' + num(histWhats) + ' | Telefone ' + num(histTel) + '\n'
+    + 'VARIAÇÕES: Tuotempo ' + varPct(ga4.tuotempo, histTuo) + ' | WhatsApp ' + varPct(ga4.whatsapp, histWhats) + ' | Telefone ' + varPct(ga4.telefone, histTel) + '\n'
+    + 'CONTEXTO: ' + (contexto || 'Não informado') + '\n'
+    + 'PRÓXIMOS PASSOS: ' + (proximos || 'Não informado') + '\n\n'
+    + 'Retorne SOMENTE JSON válido sem markdown:\n'
+    + '{"intro_p1":"","intro_p2":"","dados_perf":"","botoes_p1":"","botoes_p2":"","campanha_p1":"","campanha_p2":"","sem1":"","sem2":"","sem3":"","sem4":"","sem5":"","funil_p1":"","funil_p2":"","termos1":"","termos2":"","termos3":"","projecao":"","conclusao_p1":"","conclusao_p2":"","conclusao_p3":"","prox1":"","prox2":"","prox3":""}'
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -124,7 +125,18 @@ Retorne SOMENTE JSON válido sem markdown:
   return JSON.parse(raw)
 }
 
-async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts }) {
+async function loadTemplate(req) {
+  // Load template via HTTP from public folder
+  const host = req.headers.host
+  const protocol = host.includes('localhost') ? 'http' : 'https'
+  const url = protocol + '://' + host + '/template.pptx'
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Não foi possível carregar o template: ' + response.status)
+  const arrayBuffer = await response.arrayBuffer()
+  return Buffer.from(arrayBuffer)
+}
+
+async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts, req }) {
   const pctMeta = meta ? Math.round(g.conv / meta * 100) : 0
   const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const num = v => Math.round(v).toLocaleString('pt-BR')
@@ -133,8 +145,7 @@ async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, h
   const mes_atual_cap = mes_atual.charAt(0).toUpperCase() + mes_atual.slice(1)
   const mes_ant_cap = mesAnt.charAt(0).toUpperCase() + mesAnt.slice(1)
 
-  const templatePath = path.join(process.cwd(), "template.pptx")
-  const templateBuffer = fs.readFileSync(templatePath)
+  const templateBuffer = await loadTemplate(req)
   const zip = await JSZip.loadAsync(templateBuffer)
 
   const r = (xml, old, nw) => xml.split(old).join(nw)
@@ -280,7 +291,7 @@ export default async function handler(req, res) {
       const ga4        = parseGA4CSV(getFile('ga4').filepath)
       const { g, m }   = calcTotals(googleRows, metaRows)
       const texts      = await generateTexts({ g, m, ga4, marca, periodo, meta, mesAnt, contexto, proximos, histWhats, histTuo, histTel })
-      const pptxBuffer = await buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts })
+      const pptxBuffer = await buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts, req })
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
       res.setHeader('Content-Disposition', 'attachment; filename="Report_' + marca + '_' + periodo + '.pptx"')
