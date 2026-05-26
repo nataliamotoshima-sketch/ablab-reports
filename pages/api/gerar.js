@@ -133,7 +133,7 @@ async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, h
   const mes_atual_cap = mes_atual.charAt(0).toUpperCase() + mes_atual.slice(1)
   const mes_ant_cap = mesAnt.charAt(0).toUpperCase() + mesAnt.slice(1)
 
-  const templatePath = path.join(process.cwd(), 'public', 'template.pptx')
+  const templatePath = path.join(process.cwd(), "template.pptx")
   const templateBuffer = fs.readFileSync(templatePath)
   const zip = await JSZip.loadAsync(templateBuffer)
 
