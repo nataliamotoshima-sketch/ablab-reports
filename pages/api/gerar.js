@@ -77,7 +77,7 @@ function calcTotals(googleRows, metaRows) {
 
   const m = { custo: 0, impr: 0, cli: 0 }
   metaRows.forEach(r => {
-    const spent = r['Amount spent (BRL)'] || r['Valor usado (BRL)'] || 0
+    const spent = r['Amount spent (BRL)'] || r['Valor uso (BRL)'] || 0
     const impr  = r['Impressions'] || 0
     const cli   = r['Link clicks'] || 0
     m.custo += parseFloat(String(spent).replace(',','')) || 0
@@ -125,18 +125,7 @@ async function generateTexts({ g, m, ga4, marca, periodo, meta, mesAnt, contexto
   return JSON.parse(raw)
 }
 
-async function loadTemplate(req) {
-  // Load template via HTTP from public folder
-  const host = req.headers.host
-  const protocol = host.includes('localhost') ? 'http' : 'https'
-  const url = protocol + '://' + host + '/template.pptx'
-  const response = await fetch(url)
-  if (!response.ok) throw new Error('Não foi possível carregar o template: ' + response.status)
-  const arrayBuffer = await response.arrayBuffer()
-  return Buffer.from(arrayBuffer)
-}
-
-async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts, req }) {
+async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts }) {
   const pctMeta = meta ? Math.round(g.conv / meta * 100) : 0
   const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const num = v => Math.round(v).toLocaleString('pt-BR')
@@ -145,7 +134,34 @@ async function buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, h
   const mes_atual_cap = mes_atual.charAt(0).toUpperCase() + mes_atual.slice(1)
   const mes_ant_cap = mesAnt.charAt(0).toUpperCase() + mesAnt.slice(1)
 
-  const templateBuffer = await loadTemplate(req)
+  // Try multiple paths to find the template
+  const possiblePaths = [
+    path.join(process.cwd(), 'public', 'template.pptx'),
+    path.join(process.cwd(), 'template.pptx'),
+    '/var/task/public/template.pptx',
+    '/var/task/template.pptx',
+  ]
+
+  let templateBuffer = null
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        templateBuffer = fs.readFileSync(p)
+        console.log('Template found at:', p, 'size:', templateBuffer.length)
+        break
+      }
+    } catch(e) {}
+  }
+
+  if (!templateBuffer) {
+    throw new Error('Template não encontrado. Paths tentados: ' + possiblePaths.join(', '))
+  }
+
+  // Verify it's a valid ZIP
+  if (templateBuffer[0] !== 0x50 || templateBuffer[1] !== 0x4B) {
+    throw new Error('Template corrompido - não é um arquivo ZIP válido. Tamanho: ' + templateBuffer.length)
+  }
+
   const zip = await JSZip.loadAsync(templateBuffer)
 
   const r = (xml, old, nw) => xml.split(old).join(nw)
@@ -291,7 +307,7 @@ export default async function handler(req, res) {
       const ga4        = parseGA4CSV(getFile('ga4').filepath)
       const { g, m }   = calcTotals(googleRows, metaRows)
       const texts      = await generateTexts({ g, m, ga4, marca, periodo, meta, mesAnt, contexto, proximos, histWhats, histTuo, histTel })
-      const pptxBuffer = await buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts, req })
+      const pptxBuffer = await buildPPTX({ g, m, ga4, marca, periodo, meta, mesAnt, histWhats, histTuo, histTel, texts })
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
       res.setHeader('Content-Disposition', 'attachment; filename="Report_' + marca + '_' + periodo + '.pptx"')
