@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import JSZip from 'jszip'
 import ExcelJS from 'exceljs'
-import Anthropic from 'anthropic'
+import Anthropic from '@anthropic-ai/sdk'
 
 export const config = { api: { bodyParser: false } }
 
